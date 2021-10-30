@@ -8,6 +8,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"sync"
 	"time"
 
 	tmrpc "github.com/tendermint/tendermint/rpc/client/http"
@@ -29,7 +30,7 @@ var (
 	ListenAddress       string
 	LocalTendermintRpc  string
 	RemoteTendermintRpc string
-	BinaryName          string
+	BinaryPath          string
 	LogLevel            string
 	Limit               uint64
 
@@ -45,6 +46,14 @@ type VersionInfo struct {
 type ReleaseInfo struct {
 	Name    string `json:"name"`
 	TagName string `json:"tag_name"`
+}
+
+type Data struct {
+	releaseInfo  ReleaseInfo
+	versionInfo  VersionInfo
+	localStatus  *coretypes.ResultStatus
+	remoteStatus *coretypes.ResultStatus
+	err          error
 }
 
 var log = zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout}).With().Timestamp().Logger()
@@ -174,73 +183,52 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	registry.MustRegister(localNodeLatestBlock)
 	registry.MustRegister(remoteNodeLatestBlock)
 
-	localStatus, err := GetNodeStatus(LocalTendermintRpc)
-	if err != nil {
-		log.Error().Err(err).Msg("Could not query local Tendermint status")
-		return
-	}
-
-	remoteStatus, err := GetNodeStatus(RemoteTendermintRpc)
-	if err != nil {
-		log.Error().Err(err).Msg("Could not query remote Tendermint status")
-		return
-	}
-
-	latestReleaseUrl := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", GithubOrg, GithubRepo)
-	var releaseInfo ReleaseInfo
-
-	err = GetJson(latestReleaseUrl, &releaseInfo)
-	if err != nil {
-		log.Error().Err(err).Msg("Could not fetch latest version")
-		return
-	}
-
-	versionInfo, err := GetNodeVersion()
-	if err != nil {
-		log.Error().Err(err).Msg("Could not unmarshall app version")
+	data := GetAllData()
+	if data.err != nil {
+		log.Error().Err(data.err).Msg("Could not fetch some data")
 		return
 	}
 
 	nodeCatchingUpGauge.With(prometheus.Labels{
-		"id":      string(localStatus.NodeInfo.DefaultNodeID),
-		"moniker": localStatus.NodeInfo.Moniker,
-	}).Set(BoolToFloat64(localStatus.SyncInfo.CatchingUp))
+		"id":      string(data.localStatus.NodeInfo.DefaultNodeID),
+		"moniker": data.localStatus.NodeInfo.Moniker,
+	}).Set(BoolToFloat64(data.localStatus.SyncInfo.CatchingUp))
 
 	votingPower.With(prometheus.Labels{
-		"id":      string(localStatus.NodeInfo.DefaultNodeID),
-		"moniker": localStatus.NodeInfo.Moniker,
-	}).Set(float64(localStatus.ValidatorInfo.VotingPower))
+		"id":      string(data.localStatus.NodeInfo.DefaultNodeID),
+		"moniker": data.localStatus.NodeInfo.Moniker,
+	}).Set(float64(data.localStatus.ValidatorInfo.VotingPower))
 
 	appVersion.With(prometheus.Labels{
-		"id":      string(localStatus.NodeInfo.DefaultNodeID),
-		"moniker": localStatus.NodeInfo.Moniker,
-		"version": versionInfo.Version,
+		"id":      string(data.localStatus.NodeInfo.DefaultNodeID),
+		"moniker": data.localStatus.NodeInfo.Moniker,
+		"version": data.versionInfo.Version,
 	}).Set(1)
 
 	githubLatestVersion.With(prometheus.Labels{
 		"organization": GithubOrg,
 		"repository":   GithubRepo,
-		"version":      releaseInfo.TagName,
+		"version":      data.releaseInfo.TagName,
 	}).Set(1)
 
-	versionMismatch := !(strings.Contains(releaseInfo.TagName, versionInfo.Version) || strings.Contains(versionInfo.Version, releaseInfo.TagName))
+	versionMismatch := !(strings.Contains(data.releaseInfo.TagName, data.versionInfo.Version) || strings.Contains(data.versionInfo.Version, data.releaseInfo.TagName))
 
 	latestVersionMismatch.With(prometheus.Labels{
-		"id":             string(localStatus.NodeInfo.DefaultNodeID),
-		"moniker":        localStatus.NodeInfo.Moniker,
-		"local_version":  versionInfo.Version,
-		"remote_version": releaseInfo.TagName,
+		"id":             string(data.localStatus.NodeInfo.DefaultNodeID),
+		"moniker":        data.localStatus.NodeInfo.Moniker,
+		"local_version":  data.versionInfo.Version,
+		"remote_version": data.releaseInfo.TagName,
 	}).Set(BoolToFloat64(versionMismatch))
 
 	localNodeLatestBlock.With(prometheus.Labels{
-		"id":      string(localStatus.NodeInfo.DefaultNodeID),
-		"moniker": localStatus.NodeInfo.Moniker,
-	}).Set(float64(localStatus.SyncInfo.LatestBlockHeight))
+		"id":      string(data.localStatus.NodeInfo.DefaultNodeID),
+		"moniker": data.localStatus.NodeInfo.Moniker,
+	}).Set(float64(data.localStatus.SyncInfo.LatestBlockHeight))
 
 	remoteNodeLatestBlock.With(prometheus.Labels{
-		"id":      string(remoteStatus.NodeInfo.DefaultNodeID),
-		"moniker": remoteStatus.NodeInfo.Moniker,
-	}).Set(float64(remoteStatus.SyncInfo.LatestBlockHeight))
+		"id":      string(data.remoteStatus.NodeInfo.DefaultNodeID),
+		"moniker": data.remoteStatus.NodeInfo.Moniker,
+	}).Set(float64(data.remoteStatus.SyncInfo.LatestBlockHeight))
 
 	h := promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
 	h.ServeHTTP(w, r)
@@ -252,6 +240,74 @@ func BoolToFloat64(value bool) float64 {
 	}
 
 	return 0
+}
+
+func GetAllData() Data {
+	var (
+		wg                sync.WaitGroup
+		localStatus       *coretypes.ResultStatus
+		remoteStatus      *coretypes.ResultStatus
+		releaseInfo       ReleaseInfo
+		versionInfo       VersionInfo
+		localStatusError  error
+		remoteStatusError error
+		releaseInfoError  error
+		versionInfoError  error
+	)
+
+	go func() {
+		localStatus, localStatusError = GetNodeStatus(LocalTendermintRpc)
+		wg.Done()
+	}()
+	wg.Add(1)
+
+	go func() {
+		remoteStatus, remoteStatusError = GetNodeStatus(RemoteTendermintRpc)
+		wg.Done()
+	}()
+	wg.Add(1)
+
+	go func() {
+		latestReleaseUrl := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", GithubOrg, GithubRepo)
+		releaseInfoError = GetJson(latestReleaseUrl, &releaseInfo)
+		wg.Done()
+	}()
+	wg.Add(1)
+
+	go func() {
+		versionInfo, versionInfoError = GetNodeVersion()
+		wg.Done()
+	}()
+	wg.Add(1)
+
+	wg.Wait()
+
+	if localStatusError != nil {
+		log.Error().Err(localStatusError).Msg("Could not query local Tendermint status")
+		return Data{err: localStatusError}
+	}
+
+	if localStatusError != nil {
+		log.Error().Err(localStatusError).Msg("Could not query remote Tendermint status")
+		return Data{err: remoteStatusError}
+	}
+
+	if releaseInfoError != nil {
+		log.Error().Err(releaseInfoError).Msg("Could not fetch latest version")
+		return Data{err: releaseInfoError}
+	}
+
+	if versionInfoError != nil {
+		log.Error().Err(versionInfoError).Msg("Could not fetch app version")
+		return Data{err: versionInfoError}
+	}
+
+	return Data{
+		releaseInfo:  releaseInfo,
+		versionInfo:  versionInfo,
+		localStatus:  localStatus,
+		remoteStatus: remoteStatus,
+	}
 }
 
 func GetJson(url string, target interface{}) error {
@@ -274,8 +330,9 @@ func GetNodeStatus(nodeUrl string) (*coretypes.ResultStatus, error) {
 }
 
 func GetNodeVersion() (VersionInfo, error) {
-	out, err := exec.Command(BinaryName, "version", "--long", "--output", "json").Output()
+	out, err := exec.Command(BinaryPath, "version", "--long", "--output", "json").CombinedOutput()
 	if err != nil {
+		log.Error().Err(err).Str("output", string(out)).Msg("Could not get app version")
 		return VersionInfo{}, err
 	}
 
@@ -294,7 +351,7 @@ func main() {
 	rootCmd.PersistentFlags().StringVar(&LogLevel, "log-level", "info", "Logging level")
 	rootCmd.PersistentFlags().StringVar(&RemoteTendermintRpc, "remote-tendermint-rpc", "https://rpc.sentinel.co:443", "Remote Tendermint RPC address")
 	rootCmd.PersistentFlags().StringVar(&LocalTendermintRpc, "local-tendermint-rpc", "http://localhost:26657", "Local Tendermint RPC address")
-	rootCmd.PersistentFlags().StringVar(&BinaryName, "binary-name", "sentinelhub", "Binary version to get version from")
+	rootCmd.PersistentFlags().StringVar(&BinaryPath, "binary-path", "sentinelhub", "Binary path to get version from")
 	rootCmd.PersistentFlags().StringVar(&GithubOrg, "github-org", "sentinel-official", "Github organization name")
 	rootCmd.PersistentFlags().StringVar(&GithubRepo, "github-repo", "hub", "Github repository name")
 

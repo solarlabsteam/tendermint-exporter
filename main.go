@@ -101,12 +101,6 @@ func Execute(cmd *cobra.Command, args []string) {
 
 	zerolog.SetGlobalLevel(logLevel)
 
-	log.Info().
-		Str("--listen-address", ListenAddress).
-		Str("--tendermint-rpc", LocalTendermintRpc).
-		Str("--log-level", LogLevel).
-		Msg("Started with following parameters")
-
 	http.HandleFunc("/metrics", Handler)
 
 	log.Info().Str("address", ListenAddress).Msg("Listening")
@@ -348,10 +342,10 @@ func main() {
 	rootCmd.PersistentFlags().StringVar(&ConfigPath, "config", "", "Config file path")
 	rootCmd.PersistentFlags().StringVar(&ListenAddress, "listen-address", ":9500", "The address this exporter would listen on")
 	rootCmd.PersistentFlags().StringVar(&LogLevel, "log-level", "info", "Logging level")
-	rootCmd.PersistentFlags().StringVar(&RemoteTendermintRpc, "remote-tendermint-rpc", "https://rpc.sentinel.co:443", "Remote Tendermint RPC address")
+	rootCmd.PersistentFlags().StringVar(&RemoteTendermintRpc, "remote-tendermint-rpc", "https://rpc.cosmos.network:443", "Remote Tendermint RPC address")
 	rootCmd.PersistentFlags().StringVar(&LocalTendermintRpc, "local-tendermint-rpc", "http://localhost:26657", "Local Tendermint RPC address")
-	rootCmd.PersistentFlags().StringVar(&BinaryPath, "binary-path", "sentinelhub", "Binary path to get version from")
-	rootCmd.PersistentFlags().StringVar(&GithubOrg, "github-org", "sentinel-official", "Github organization name")
+	rootCmd.PersistentFlags().StringVar(&BinaryPath, "binary-path", "cosmos", "Binary path to get version from")
+	rootCmd.PersistentFlags().StringVar(&GithubOrg, "github-org", "gaia", "Github organization name")
 	rootCmd.PersistentFlags().StringVar(&GithubRepo, "github-repo", "hub", "Github repository name")
 
 	if err := rootCmd.Execute(); err != nil {

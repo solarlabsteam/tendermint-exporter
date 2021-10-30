@@ -32,7 +32,6 @@ var (
 	RemoteTendermintRpc string
 	BinaryPath          string
 	LogLevel            string
-	Limit               uint64
 
 	GithubOrg  string
 	GithubRepo string

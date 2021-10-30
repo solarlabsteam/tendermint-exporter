@@ -180,7 +180,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	if data.err != nil {
 		log.Error().Err(data.err).Msg("Could not fetch some data")
 		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte("Error fetching data: " + data.err.Error()))
+		_, _ = w.Write([]byte("Error fetching data: " + data.err.Error()))
 		return
 	}
 

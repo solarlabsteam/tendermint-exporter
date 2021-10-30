@@ -346,9 +346,9 @@ func main() {
 	rootCmd.PersistentFlags().StringVar(&LogLevel, "log-level", "info", "Logging level")
 	rootCmd.PersistentFlags().StringVar(&RemoteTendermintRpc, "remote-tendermint-rpc", "https://rpc.cosmos.network:443", "Remote Tendermint RPC address")
 	rootCmd.PersistentFlags().StringVar(&LocalTendermintRpc, "local-tendermint-rpc", "http://localhost:26657", "Local Tendermint RPC address")
-	rootCmd.PersistentFlags().StringVar(&BinaryPath, "binary-path", "cosmos", "Binary path to get version from")
-	rootCmd.PersistentFlags().StringVar(&GithubOrg, "github-org", "gaia", "Github organization name")
-	rootCmd.PersistentFlags().StringVar(&GithubRepo, "github-repo", "hub", "Github repository name")
+	rootCmd.PersistentFlags().StringVar(&BinaryPath, "binary-path", "gaia", "Binary path to get version from")
+	rootCmd.PersistentFlags().StringVar(&GithubOrg, "github-org", "cosmos", "Github organization name")
+	rootCmd.PersistentFlags().StringVar(&GithubRepo, "github-repo", "gaia", "Github repository name")
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal().Err(err).Msg("Could not start application")

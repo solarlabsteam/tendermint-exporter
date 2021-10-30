@@ -53,7 +53,7 @@ KillSignal=SIGTERM
 WantedBy=multi-user.target
 ```
 
-If you're using cosmovisor, consider adding the same set of env variables as in your cosmovisor's systemd file, otherwise fetching app version would cash.
+If you're using cosmovisor, consider adding the same set of env variables as in your cosmovisor's systemd file, otherwise fetching app version would crash.
 
 Then we'll add this service to the autostart and run it:
 

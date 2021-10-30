@@ -179,6 +179,8 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	data := GetAllData()
 	if data.err != nil {
 		log.Error().Err(data.err).Msg("Could not fetch some data")
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("Error fetching data: " + data.err.Error()))
 		return
 	}
 

@@ -282,8 +282,8 @@ func GetAllData() Data {
 		return Data{err: localStatusError}
 	}
 
-	if localStatusError != nil {
-		log.Error().Err(localStatusError).Msg("Could not query remote Tendermint status")
+	if remoteStatusError != nil {
+		log.Error().Err(remoteStatusError).Msg("Could not query remote Tendermint status")
 		return Data{err: remoteStatusError}
 	}
 
@@ -321,7 +321,16 @@ func GetNodeStatus(nodeUrl string) (*coretypes.ResultStatus, error) {
 		return nil, err
 	}
 
-	return client.Status(context.Background())
+	status, err := client.Status(context.Background())
+	if err != nil {
+		return nil, err
+	}
+
+	if status == nil {
+		return nil, fmt.Errorf("empty status from node")
+	}
+
+	return status, nil
 }
 
 func GetNodeVersion() (VersionInfo, error) {

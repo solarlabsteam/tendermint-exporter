@@ -194,36 +194,44 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		"moniker": data.localStatus.NodeInfo.Moniker,
 	}).Set(float64(data.localStatus.ValidatorInfo.VotingPower))
 
-	appVersion.With(prometheus.Labels{
-		"id":      string(data.localStatus.NodeInfo.DefaultNodeID),
-		"moniker": data.localStatus.NodeInfo.Moniker,
-		"version": data.versionInfo.Version,
-	}).Set(1)
+	if data.versionInfo.Version != "" {
+		appVersion.With(prometheus.Labels{
+			"id":      string(data.localStatus.NodeInfo.DefaultNodeID),
+			"moniker": data.localStatus.NodeInfo.Moniker,
+			"version": data.versionInfo.Version,
+		}).Set(1)
+	}
 
-	githubLatestVersion.With(prometheus.Labels{
-		"organization": GithubOrg,
-		"repository":   GithubRepo,
-		"version":      data.releaseInfo.TagName,
-	}).Set(1)
+	if data.releaseInfo.TagName != "" {
+		githubLatestVersion.With(prometheus.Labels{
+			"organization": GithubOrg,
+			"repository":   GithubRepo,
+			"version":      data.releaseInfo.TagName,
+		}).Set(1)
+	}
 
-	versionMismatch := !(strings.Contains(data.releaseInfo.TagName, data.versionInfo.Version) || strings.Contains(data.versionInfo.Version, data.releaseInfo.TagName))
+	if data.versionInfo.Version != "" && data.releaseInfo.TagName != "" {
+		versionMismatch := !(strings.Contains(data.releaseInfo.TagName, data.versionInfo.Version) || strings.Contains(data.versionInfo.Version, data.releaseInfo.TagName))
 
-	latestVersionMismatch.With(prometheus.Labels{
-		"id":             string(data.localStatus.NodeInfo.DefaultNodeID),
-		"moniker":        data.localStatus.NodeInfo.Moniker,
-		"local_version":  data.versionInfo.Version,
-		"remote_version": data.releaseInfo.TagName,
-	}).Set(BoolToFloat64(versionMismatch))
+		latestVersionMismatch.With(prometheus.Labels{
+			"id":             string(data.localStatus.NodeInfo.DefaultNodeID),
+			"moniker":        data.localStatus.NodeInfo.Moniker,
+			"local_version":  data.versionInfo.Version,
+			"remote_version": data.releaseInfo.TagName,
+		}).Set(BoolToFloat64(versionMismatch))
+	}
 
 	localNodeLatestBlock.With(prometheus.Labels{
 		"id":      string(data.localStatus.NodeInfo.DefaultNodeID),
 		"moniker": data.localStatus.NodeInfo.Moniker,
 	}).Set(float64(data.localStatus.SyncInfo.LatestBlockHeight))
 
-	remoteNodeLatestBlock.With(prometheus.Labels{
-		"id":      string(data.remoteStatus.NodeInfo.DefaultNodeID),
-		"moniker": data.remoteStatus.NodeInfo.Moniker,
-	}).Set(float64(data.remoteStatus.SyncInfo.LatestBlockHeight))
+	if data.remoteStatus != nil {
+		remoteNodeLatestBlock.With(prometheus.Labels{
+			"id":      string(data.remoteStatus.NodeInfo.DefaultNodeID),
+			"moniker": data.remoteStatus.NodeInfo.Moniker,
+		}).Set(float64(data.remoteStatus.SyncInfo.LatestBlockHeight))
+	}
 
 	h := promhttp.HandlerFor(registry, promhttp.HandlerOpts{})
 	h.ServeHTTP(w, r)
@@ -257,12 +265,24 @@ func GetAllData() Data {
 	wg.Add(1)
 
 	go func() {
+		if RemoteTendermintRpc == "" {
+			log.Debug().Msg("No remote tendermint RPC address set, not requesting its status.")
+			wg.Done()
+			return
+		}
+
 		remoteStatus, remoteStatusError = GetNodeStatus(RemoteTendermintRpc)
 		wg.Done()
 	}()
 	wg.Add(1)
 
 	go func() {
+		if GithubOrg == "" || GithubRepo == "" {
+			log.Debug().Msg("No GitHub org or repo set, not requesting latest binary version.")
+			wg.Done()
+			return
+		}
+
 		latestReleaseUrl := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", GithubOrg, GithubRepo)
 		releaseInfoError = GetJson(latestReleaseUrl, &releaseInfo)
 		wg.Done()
@@ -270,7 +290,13 @@ func GetAllData() Data {
 	wg.Add(1)
 
 	go func() {
-		versionInfo, versionInfoError = GetNodeVersion()
+		if BinaryPath == "" {
+			log.Debug().Msg("Binary path not set, not querying its version.")
+			wg.Done()
+			return
+		}
+
+		versionInfo, versionInfoError = GetBinaryVersion()
 		wg.Done()
 	}()
 	wg.Add(1)
@@ -333,7 +359,7 @@ func GetNodeStatus(nodeUrl string) (*coretypes.ResultStatus, error) {
 	return status, nil
 }
 
-func GetNodeVersion() (VersionInfo, error) {
+func GetBinaryVersion() (VersionInfo, error) {
 	out, err := exec.Command(BinaryPath, "version", "--long", "--output", "json").CombinedOutput()
 	if err != nil {
 		log.Error().Err(err).Str("output", string(out)).Msg("Could not get app version")
@@ -353,11 +379,11 @@ func main() {
 	rootCmd.PersistentFlags().StringVar(&ConfigPath, "config", "", "Config file path")
 	rootCmd.PersistentFlags().StringVar(&ListenAddress, "listen-address", ":9500", "The address this exporter would listen on")
 	rootCmd.PersistentFlags().StringVar(&LogLevel, "log-level", "info", "Logging level")
-	rootCmd.PersistentFlags().StringVar(&RemoteTendermintRpc, "remote-tendermint-rpc", "https://rpc.cosmos.network:443", "Remote Tendermint RPC address")
+	rootCmd.PersistentFlags().StringVar(&RemoteTendermintRpc, "remote-tendermint-rpc", "", "Remote Tendermint RPC address")
 	rootCmd.PersistentFlags().StringVar(&LocalTendermintRpc, "local-tendermint-rpc", "http://localhost:26657", "Local Tendermint RPC address")
-	rootCmd.PersistentFlags().StringVar(&BinaryPath, "binary-path", "gaia", "Binary path to get version from")
-	rootCmd.PersistentFlags().StringVar(&GithubOrg, "github-org", "cosmos", "Github organization name")
-	rootCmd.PersistentFlags().StringVar(&GithubRepo, "github-repo", "gaia", "Github repository name")
+	rootCmd.PersistentFlags().StringVar(&BinaryPath, "binary-path", "", "Binary path to get version from")
+	rootCmd.PersistentFlags().StringVar(&GithubOrg, "github-org", "", "Github organization name")
+	rootCmd.PersistentFlags().StringVar(&GithubRepo, "github-repo", "", "Github repository name")
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal().Err(err).Msg("Could not start application")

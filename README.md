@@ -15,7 +15,7 @@ First of all, you need to download the latest release from [the releases page](h
 
 ```sh
 wget <the link from the releases page>
-tar xvfz tendermint-exporter-*
+tar xvfz <the filename you've just downloaded>
 ./tendermint-exporter <params>
 ```
 
@@ -43,7 +43,7 @@ User=<username>
 TimeoutStartSec=0
 CPUWeight=95
 IOWeight=95
-ExecStart=tendermint-exporter
+ExecStart=tendermint-exporter --config <path to config>
 Restart=always
 RestartSec=2
 LimitNOFILE=800000
@@ -93,13 +93,20 @@ You can pass the artuments to the executable file to configure it. Here is the p
 
 - `--listen-address` - the address with port the node would listen to. For example, you can use it to redefine port or to make the exporter accessible from the outside by listening on `127.0.0.1`. Defaults to `:9500` (so it's accessible from the outside on port 9500)
 - `--local-tendermint-rpc` - local Tendermint RPC URL to query node stats. Defaults to `http://localhost:26657`
-- `--remote-tendermint-rpc` - remote Tendermint RPC URL to query node stats. Defaults to `http://rpc.cosmos.network:443`
-- `--binary-path` - path to a fullnode binary to query version from. It may fail if it's located in $GOPATH and the path is relative, so better to explicitly provide the absolute path.
-- `--github-org` - GitHub organization name
-- `--github-repo` - Github repository. This param and `--github-org` are used to specify the repository hosting the full node binary sources.
+- `--remote-tendermint-rpc` - remote Tendermint RPC URL to query node stats. Defaults to `http://rpc.cosmos.network:443`. Optional, if not provided, the exporter won't scrape data from the remote node.
+- `--binary-path` - path to a fullnode binary to query version from. It may fail if it's located in $GOPATH and the path is relative, so better to explicitly provide the absolute path. Optional, if not provided the exporter won't collect data on binary version.
+- `--github-org` - GitHub organization name.
+- `--github-repo` - Github repository. This param and `--github-org` are used to specify the repository hosting the full node binary sources. If one or both of these are not provided, the exporter won't fetch the remote GitHub version.
 - `--log-devel` - logger level. Defaults to `info`. You can set it to `debug` to make it more verbose.
 
-Additionally, you can pass a `--config` flag with a path to your config file (I use `.toml`, but anything supported by [viper](https://github.com/spf13/viper) should work).
+Additionally, you can pass a `--config` flag with a path to your config file (I use `.toml`, but anything supported by [viper](https://github.com/spf13/viper) should work). Here's the example of such config:
+
+```
+binary-path = "/home/validator/go/bin/gaiad"
+github-org = "cosmos"
+github-repo = "gaia"
+remote-tendermint-rpc = "https://rpc.cosmos.network:443"
+```
 
 ## How can I contribute?
 

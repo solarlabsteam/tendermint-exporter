@@ -33,8 +33,9 @@ var (
 	BinaryPath          string
 	LogLevel            string
 
-	GithubOrg  string
-	GithubRepo string
+	GithubOrg   string
+	GithubRepo  string
+	GithubToken string
 )
 
 type VersionInfo struct {
@@ -56,8 +57,6 @@ type Data struct {
 }
 
 var log = zerolog.New(zerolog.ConsoleWriter{Out: os.Stdout}).With().Timestamp().Logger()
-
-var myClient = &http.Client{Timeout: 10 * time.Second}
 
 var rootCmd = &cobra.Command{
 	Use:  "tendermint-exporter",
@@ -284,7 +283,7 @@ func GetAllData() Data {
 		}
 
 		latestReleaseUrl := fmt.Sprintf("https://api.github.com/repos/%s/%s/releases/latest", GithubOrg, GithubRepo)
-		releaseInfoError = GetJson(latestReleaseUrl, &releaseInfo)
+		releaseInfoError = GetGithubRelease(latestReleaseUrl, &releaseInfo)
 		wg.Done()
 	}()
 	wg.Add(1)
@@ -331,14 +330,25 @@ func GetAllData() Data {
 	}
 }
 
-func GetJson(url string, target interface{}) error {
-	r, err := myClient.Get(url)
+func GetGithubRelease(url string, target interface{}) error {
+	client := &http.Client{Timeout: 10 * time.Second}
+
+	req, err := http.NewRequest("GET", url, nil)
 	if err != nil {
 		return err
 	}
-	defer r.Body.Close()
 
-	return json.NewDecoder(r.Body).Decode(target)
+	if GithubToken != "" {
+		req.Header.Set("Authorization", "Bearer "+GithubToken)
+	}
+
+	res, err := client.Do(req)
+	if err != nil {
+		return err
+	}
+	defer res.Body.Close()
+
+	return json.NewDecoder(res.Body).Decode(target)
 }
 
 func GetNodeStatus(nodeUrl string) (*coretypes.ResultStatus, error) {
@@ -384,6 +394,7 @@ func main() {
 	rootCmd.PersistentFlags().StringVar(&BinaryPath, "binary-path", "", "Binary path to get version from")
 	rootCmd.PersistentFlags().StringVar(&GithubOrg, "github-org", "", "Github organization name")
 	rootCmd.PersistentFlags().StringVar(&GithubRepo, "github-repo", "", "Github repository name")
+	rootCmd.PersistentFlags().StringVar(&GithubToken, "github-token", "", "Github personal access token")
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal().Err(err).Msg("Could not start application")

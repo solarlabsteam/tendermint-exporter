@@ -76,7 +76,7 @@ Here's the example of the Prometheus config you can use for scraping data:
 ```yaml
 scrape-configs:
   - job_name: 'tendermint-exporter'
-    scrape_interval: 120s
+    scrape_interval: 10s
     static_configs:
       - targets: ['<your IP>:9500']
 ```
@@ -93,10 +93,11 @@ You can pass the artuments to the executable file to configure it. Here is the p
 
 - `--listen-address` - the address with port the node would listen to. For example, you can use it to redefine port or to make the exporter accessible from the outside by listening on `127.0.0.1`. Defaults to `:9500` (so it's accessible from the outside on port 9500)
 - `--local-tendermint-rpc` - local Tendermint RPC URL to query node stats. Defaults to `http://localhost:26657`
-- `--remote-tendermint-rpc` - remote Tendermint RPC URL to query node stats. Defaults to `http://rpc.cosmos.network:443`. Optional, if not provided, the exporter won't scrape data from the remote node.
-- `--binary-path` - path to a fullnode binary to query version from. It may fail if it's located in $GOPATH and the path is relative, so better to explicitly provide the absolute path. Optional, if not provided the exporter won't collect data on binary version.
+- `--remote-tendermint-rpc` - remote Tendermint RPC URL to query node stats. Optional, if not provided, the exporter won't scrape data from the remote node.
+- `--binary-path` - path to a fullnode binary to query version from. It may fail if it's located in $GOPATH and the path is relative, so better to explicitly provide the absolute path. Optional, if not provided the exporter won't collect data on binary version. This won't work on chains where `<binary-path> version --long --output json` doesn't work or returns data not in JSON.
 - `--github-org` - GitHub organization name.
-- `--github-repo` - Github repository. This param and `--github-org` are used to specify the repository hosting the full node binary sources. If one or both of these are not provided, the exporter won't fetch the remote GitHub version.
+- `--github-repo` - GitHub repository. This param and `--github-org` are used to specify the repository hosting the full node binary sources. If one or both of these are not provided, the exporter won't fetch the remote GitHub version.
+- `--github-token` - GitHub personal access token. You can get one [here](https://github.com/settings/tokens). If this isn't provided, GitHub only allows you to do 60 requests per hour, if you do more requests than that it'll start throwing errors, causing all requests to this exporter to fail.
 - `--log-devel` - logger level. Defaults to `info`. You can set it to `debug` to make it more verbose.
 
 Additionally, you can pass a `--config` flag with a path to your config file (I use `.toml`, but anything supported by [viper](https://github.com/spf13/viper) should work). Here's the example of such config:

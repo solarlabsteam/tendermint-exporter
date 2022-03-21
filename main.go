@@ -134,6 +134,14 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		[]string{"id", "moniker"},
 	)
 
+	timeSinceLatestBlock := prometheus.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "tendermint_node_time_since_latest_block",
+			Help: "Time since latest block",
+		},
+		[]string{"id", "moniker"},
+	)
+
 	githubLatestVersion := prometheus.NewGaugeVec(
 		prometheus.GaugeOpts{
 			Name: "tendermint_github_latest_version",
@@ -174,6 +182,7 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 	registry.MustRegister(latestVersionMismatch)
 	registry.MustRegister(localNodeLatestBlock)
 	registry.MustRegister(remoteNodeLatestBlock)
+	registry.MustRegister(timeSinceLatestBlock)
 
 	data := GetAllData()
 	if data.err != nil {
@@ -192,6 +201,11 @@ func Handler(w http.ResponseWriter, r *http.Request) {
 		"id":      string(data.localStatus.NodeInfo.DefaultNodeID),
 		"moniker": data.localStatus.NodeInfo.Moniker,
 	}).Set(float64(data.localStatus.ValidatorInfo.VotingPower))
+
+	timeSinceLatestBlock.With(prometheus.Labels{
+		"id":      string(data.localStatus.NodeInfo.DefaultNodeID),
+		"moniker": data.localStatus.NodeInfo.Moniker,
+	}).Set(time.Since(data.localStatus.SyncInfo.LatestBlockTime).Seconds())
 
 	if data.versionInfo.Version != "" {
 		appVersion.With(prometheus.Labels{

@@ -32,6 +32,7 @@ var (
 	RemoteTendermintRpc string
 	BinaryPath          string
 	LogLevel            string
+	JsonOutput          bool
 
 	GithubOrg   string
 	GithubRepo  string
@@ -63,15 +64,11 @@ var rootCmd = &cobra.Command{
 	Long: "Scrape the data on Tendermint node.",
 	PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 		if ConfigPath == "" {
-			log.Info().Msg("Config file not provided")
 			return nil
 		}
 
-		log.Info().Msg("Config file provided")
-
 		viper.SetConfigFile(ConfigPath)
 		if err := viper.ReadInConfig(); err != nil {
-			log.Info().Err(err).Msg("Error reading config file")
 			if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 				return err
 			}
@@ -99,6 +96,10 @@ func Execute(cmd *cobra.Command, args []string) {
 	}
 
 	zerolog.SetGlobalLevel(logLevel)
+
+	if JsonOutput {
+		log = zerolog.New(os.Stdout).With().Timestamp().Logger()
+	}
 
 	http.HandleFunc("/metrics", Handler)
 
@@ -409,6 +410,7 @@ func main() {
 	rootCmd.PersistentFlags().StringVar(&GithubOrg, "github-org", "", "Github organization name")
 	rootCmd.PersistentFlags().StringVar(&GithubRepo, "github-repo", "", "Github repository name")
 	rootCmd.PersistentFlags().StringVar(&GithubToken, "github-token", "", "Github personal access token")
+	rootCmd.PersistentFlags().BoolVar(&JsonOutput, "json", false, "Output logs as JSON")
 
 	if err := rootCmd.Execute(); err != nil {
 		log.Fatal().Err(err).Msg("Could not start application")

@@ -391,13 +391,30 @@ func GetBinaryVersion() (VersionInfo, error) {
 		return VersionInfo{}, err
 	}
 
+	jsonOutput := getJsonString(string(out))
+
 	var versionInfo VersionInfo
-	if err := json.Unmarshal(out, &versionInfo); err != nil {
-		log.Error().Err(err).Msg("Could not unmarshall app version")
+	if err := json.Unmarshal([]byte(jsonOutput), &versionInfo); err != nil {
+		log.Error().Err(err).Str("output", jsonOutput).Msg("Could not unmarshall app version")
 		return versionInfo, err
 	}
 
 	return versionInfo, nil
+}
+
+// a helper to get the first string in a multiline string starting with { and ending with }
+// it's a workaround for cosmovisor as it adds some extra output, causing
+// it to not be valid JSON
+func getJsonString(input string) string {
+	split := strings.Split(input, "\n")
+	for _, line := range split {
+		if strings.HasPrefix(line, "{") && strings.HasSuffix(line, "}") {
+			return line
+		}
+	}
+
+	// return the whole line, there's no valid JSON there
+	return input
 }
 
 func main() {

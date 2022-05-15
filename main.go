@@ -31,6 +31,7 @@ var (
 	LocalTendermintRpc  string
 	RemoteTendermintRpc string
 	BinaryPath          string
+	BinaryArgs          string
 	LogLevel            string
 	JsonOutput          bool
 
@@ -385,7 +386,8 @@ func GetNodeStatus(nodeUrl string) (*coretypes.ResultStatus, error) {
 }
 
 func GetBinaryVersion() (VersionInfo, error) {
-	out, err := exec.Command(BinaryPath, "version", "--long", "--output", "json").CombinedOutput()
+	args := strings.Split(BinaryArgs, " ")
+	out, err := exec.Command(BinaryPath, args...).CombinedOutput()
 	if err != nil {
 		log.Error().Err(err).Str("output", string(out)).Msg("Could not get app version")
 		return VersionInfo{}, err
@@ -424,6 +426,7 @@ func main() {
 	rootCmd.PersistentFlags().StringVar(&RemoteTendermintRpc, "remote-tendermint-rpc", "", "Remote Tendermint RPC address")
 	rootCmd.PersistentFlags().StringVar(&LocalTendermintRpc, "local-tendermint-rpc", "http://localhost:26657", "Local Tendermint RPC address")
 	rootCmd.PersistentFlags().StringVar(&BinaryPath, "binary-path", "", "Binary path to get version from")
+	rootCmd.PersistentFlags().StringVar(&BinaryArgs, "binary-args", "version --long --output json", "Arguments for binary to get version")
 	rootCmd.PersistentFlags().StringVar(&GithubOrg, "github-org", "", "Github organization name")
 	rootCmd.PersistentFlags().StringVar(&GithubRepo, "github-repo", "", "Github repository name")
 	rootCmd.PersistentFlags().StringVar(&GithubToken, "github-token", "", "Github personal access token")
